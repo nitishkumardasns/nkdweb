@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScanNote — Barcode Scanner & Remarks Logger</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'scan-line': 'scanLine 2.2s ease-in-out infinite',
+                        'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        scanLine: {
+                            '0%, 100%': { transform: 'translateY(0%)' },
+                            '50%': { transform: 'translateY(100%)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- html5-qrcode Library for Camera & Image Barcode Scanning -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- SheetJS (XLSX) Library for Real Excel (.xlsx) Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* Ensure the html5-qrcode video stream fills the rounded viewfinder cleanly */
+        #reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 0.75rem;
+        }
+        #reader__dashboard_section_csr,
+        #reader__dashboard_section_swaplink {
+            display: none !important;
+        }
+        #reader img[alt="Info icon"] {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+            <!-- Brand -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                    <!-- Barcode SVG Icon -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8v8M10 8v8M14 8v8M17 8v8" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight leading-none">Scan<span class="text-indigo-600 dark:text-indigo-400">Note</span></h1>
+                    <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 hidden sm:block">Barcode Scanner & Remarks Logger</p>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex items-center gap-2">
+                <!-- Sound Toggle -->
+                <button id="btn-sound" type="button" title="Toggle Scan Beep" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors">
+                    <svg id="icon-sound-on" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                    <svg id="icon-sound-off" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                    </svg>
+                </button>
+
+                <!-- Theme Toggle -->
+                <button id="btn-theme" type="button" title="Toggle Dark Mode" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors">
+                    <svg id="icon-moon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                    <svg id="icon-sun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                </button>
+
+                <!-- Primary Excel Export Button -->
+                <button id="btn-export-excel" type="button" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-sm font-semibold shadow-sm shadow-emerald-600/20 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Export Excel</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- LEFT COLUMN: Scanner & Remark Form -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Card 1: Barcode Scanner Studio -->
+                <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span id="scanner-status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Scanner Studio</h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Rapid Auto-Save Toggle -->
+                            <label class="inline-flex items-center gap-1.5 cursor-pointer select-none" title="Automatically save scanned barcodes without waiting for remarks">
+                                <input type="checkbox" id="toggle-autosave" class="sr-only peer">
+                                <div class="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600 relative"></div>
+                                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">Auto-Save</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-4">
+                        <!-- Camera Viewfinder Area -->
+                        <div class="relative w-full aspect-[4/3] sm:aspect-video bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center border border-slate-800">
+                            <!-- html5-qrcode mounts here -->
+                            <div id="reader" class="w-full h-full"></div>
+
+                            <!-- Idle Placeholder Overlay -->
+                            <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-slate-900 to-slate-950">
+                                <div class="w-14 h-14 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-indigo-400 mb-3">
+                                    <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <p class="text-sm font-semibold text-white">Camera Ready</p>
+                                <p class="text-xs text-slate-400 mt-1 max-w-xs">Supports EAN, UPC, Code 128, Code 39 & QR codes. Start camera or upload an image.</p>
+                            </div>
+
+                            <!-- Active Laser Scan Overlay -->
+                            <div id="scanner-laser" class="hidden pointer-events-none absolute inset-6 border-2 border-indigo-400/50 rounded-xl overflow-hidden">
+                                <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_12px_2px_rgba(244,63,94,0.8)] animate-scan-line"></div>
+                            </div>
+
+                            <!-- Scan Success Flash -->
+                            <div id="scanner-flash" class="pointer-events-none absolute inset-0 bg-emerald-500/30 opacity-0 transition-opacity duration-300"></div>
+                        </div>
+
+                        <!-- Scanner Action Buttons -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                            <button id="btn-toggle-camera" type="button" class="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-sm transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span id="btn-camera-text">Start Camera</span>
+                            </button>
+
+                            <!-- Upload Barcode Image -->
+                            <label class="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-semibold cursor-pointer transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span>Scan Image</span>
+                                <input id="input-scan-file" type="file" accept="image/*" class="hidden">
+                            </label>
+
+                            <!-- Demo / Simulate Scan Button -->
+                            <button id="btn-simulate" type="button" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-500/20 text-xs sm:text-sm font-semibold transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                <span>Test Scan</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Card 2: Entry & Remarks Form -->
+                <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Item Details & Remarks</h2>
+                        <span id="detected-format-badge" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">CODE_128</span>
+                    </div>
+
+                    <form id="entry-form" class="space-y-4">
+                        <!-- Barcode Input -->
+                        <div>
+                            <label for="input-barcode" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Barcode / Code Value <span class="text-rose-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" id="input-barcode" required placeholder="Scan or type barcode manually..." autocomplete="off"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm font-mono font-semibold transition-all">
+                                <button type="button" id="btn-clear-barcode" title="Clear Barcode" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quick-Remark Chips -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Quick Remarks (Tap to add)</label>
+                            <div id="quick-chips" class="flex flex-wrap gap-1.5">
+                                <button type="button" data-remark="Used Machine" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Used Machine</button>
+                                <button type="button" data-remark="No Gas" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ No Gas</button>
+                                <button type="button" data-remark="Body Dent" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Body Dent</button>
+                                <button type="button" data-remark="Body Scratch" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Body Scratch</button>
+                                <button type="button" data-remark="Panel Broken" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Panel Broken</button>
+                                <button type="button" data-remark="Body Damage" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Body Damage</button>
+                                <button type="button" data-remark="Condenser Dent" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Condenser Dent</button>
+                            </div>
+                        </div>
+
+                        <!-- Remarks Textarea -->
+                        <div>
+                            <label for="input-remarks" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Remarks / Notes</label>
+                            <textarea id="input-remarks" rows="2" placeholder="Write custom remarks, shelf location, or observations..."
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm transition-all resize-none"></textarea>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16
