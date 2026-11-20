@@ -1,0 +1,1103 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScanNote — Barcode Scanner & Remarks Logger</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'scan-line': 'scanLine 2.2s ease-in-out infinite',
+                        'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        scanLine: {
+                            '0%, 100%': { transform: 'translateY(0%)' },
+                            '50%': { transform: 'translateY(100%)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- html5-qrcode Library for Camera & Image Barcode Scanning -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- SheetJS (XLSX) Library for Real Excel (.xlsx) Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* Ensure the html5-qrcode video stream fills the rounded viewfinder cleanly */
+        #reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 0.75rem;
+        }
+        #reader__dashboard_section_csr,
+        #reader__dashboard_section_swaplink {
+            display: none !important;
+        }
+        #reader img[alt="Info icon"] {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+            <!-- Brand -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                    <!-- Barcode SVG Icon -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8v8M10 8v8M14 8v8M17 8v8" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight leading-none">Scan<span class="text-indigo-600 dark:text-indigo-400">Note</span></h1>
+                    <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 hidden sm:block">Barcode Scanner & Remarks Logger</p>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex items-center gap-2">
+                <!-- Sound Toggle -->
+                <button id="btn-sound" type="button" title="Toggle Scan Beep" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors">
+                    <svg id="icon-sound-on" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                    <svg id="icon-sound-off" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                    </svg>
+                </button>
+
+                <!-- Theme Toggle -->
+                <button id="btn-theme" type="button" title="Toggle Dark Mode" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors">
+                    <svg id="icon-moon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                    <svg id="icon-sun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                </button>
+
+                <!-- Primary Excel Export Button -->
+                <button id="btn-export-excel" type="button" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-sm font-semibold shadow-sm shadow-emerald-600/20 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Export Excel</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- LEFT COLUMN: Scanner & Remark Form -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Card 1: Barcode Scanner Studio -->
+                <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span id="scanner-status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Scanner Studio</h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Rapid Auto-Save Toggle -->
+                            <label class="inline-flex items-center gap-1.5 cursor-pointer select-none" title="Automatically save scanned barcodes without waiting for remarks">
+                                <input type="checkbox" id="toggle-autosave" class="sr-only peer">
+                                <div class="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600 relative h-4.5"></div>
+                                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">Auto-Save</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-4">
+                        <!-- Camera Viewfinder Area -->
+                        <div class="relative w-full aspect-[4/3] sm:aspect-video bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center border border-slate-800">
+                            <!-- html5-qrcode mounts here -->
+                            <div id="reader" class="w-full h-full"></div>
+
+                            <!-- Idle Placeholder Overlay -->
+                            <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-slate-900 to-slate-950">
+                                <div class="w-14 h-14 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-indigo-400 mb-3">
+                                    <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <p class="text-sm font-semibold text-white">Camera Ready</p>
+                                <p class="text-xs text-slate-400 mt-1 max-w-xs">Supports EAN, UPC, Code 128, Code 39 & QR codes. Start camera or upload an image.</p>
+                            </div>
+
+                            <!-- Active Laser Scan Overlay -->
+                            <div id="scanner-laser" class="hidden pointer-events-none absolute inset-6 border-2 border-indigo-400/50 rounded-xl overflow-hidden">
+                                <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_12px_2px_rgba(244,63,94,0.8)] animate-scan-line"></div>
+                            </div>
+
+                            <!-- Scan Success Flash -->
+                            <div id="scanner-flash" class="pointer-events-none absolute inset-0 bg-emerald-500/30 opacity-0 transition-opacity duration-300"></div>
+                        </div>
+
+                        <!-- Scanner Action Buttons -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                            <button id="btn-toggle-camera" type="button" class="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-sm transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span id="btn-camera-text">Start Camera</span>
+                            </button>
+
+                            <!-- Upload Barcode Image -->
+                            <label class="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-semibold cursor-pointer transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span>Scan Image</span>
+                                <input id="input-scan-file" type="file" accept="image/*" class="hidden">
+                            </label>
+
+                            <!-- Demo / Simulate Scan Button -->
+                            <button id="btn-simulate" type="button" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-500/20 text-xs sm:text-sm font-semibold transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                <span>Test Scan</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Card 2: Entry & Remarks Form -->
+                <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Item Details & Remarks</h2>
+                        <span id="detected-format-badge" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">CODE_128</span>
+                    </div>
+
+                    <form id="entry-form" class="space-y-4">
+                        <!-- Barcode Input -->
+                        <div>
+                            <label for="input-barcode" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Barcode / Code Value <span class="text-rose-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" id="input-barcode" required placeholder="Scan or type barcode manually..." autocomplete="off"
+                                    class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm font-mono font-semibold transition-all">
+                                <button type="button" id="btn-clear-barcode" title="Clear Barcode" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quantity & Condition Status Row -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <!-- Quantity Stepper -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Quantity</label>
+                                <div class="flex items-center rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 overflow-hidden">
+                                    <button type="button" id="btn-qty-minus" class="px-3 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold transition-colors">−</button>
+                                    <input type="number" id="input-qty" value="1" min="1" max="99999" class="w-full text-center bg-transparent text-sm font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                                    <button type="button" id="btn-qty-plus" class="px-3 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold transition-colors">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Status Selector -->
+                            <div>
+                                <label for="input-status" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Condition / Tag</label>
+                                <select id="input-status" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm font-medium transition-all">
+                                    <option value="Verified">Verified / OK</option>
+                                    <option value="Damaged">Damaged</option>
+                                    <option value="Low Stock">Low Stock</option>
+                                    <option value="Review">Needs Review</option>
+                                    <option value="Returned">Returned</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Quick-Remark Chips -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Quick Remarks (Tap to add)</label>
+                            <div id="quick-chips" class="flex flex-wrap gap-1.5">
+                                <button type="button" data-remark="Good condition" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Good condition</button>
+                                <button type="button" data-remark="Box dented" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Box dented</button>
+                                <button type="button" data-remark="Seal intact" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Seal intact</button>
+                                <button type="button" data-remark="Missing label" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Missing label</button>
+                                <button type="button" data-remark="Priority dispatch" class="quick-chip px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300 text-slate-600 dark:text-slate-300 transition-colors">+ Priority dispatch</button>
+                            </div>
+                        </div>
+
+                        <!-- Remarks Textarea -->
+                        <div>
+                            <label for="input-remarks" class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Remarks / Notes</label>
+                            <textarea id="input-remarks" rows="2" placeholder="Write custom remarks, shelf location, or observations..."
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm transition-all resize-none"></textarea>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>Save to Log</span>
+                        </button>
+                    </form>
+                </section>
+            </div>
+
+            <!-- RIGHT COLUMN: Stats, Search & Scanned Items Log -->
+            <div class="lg:col-span-7 space-y-5">
+                
+                <!-- Summary Metrics -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Entries</p>
+                        <p id="stat-entries" class="text-2xl font-extrabold mt-1 text-slate-900 dark:text-white">0</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Unique Codes</p>
+                        <p id="stat-unique" class="text-2xl font-extrabold mt-1 text-indigo-600 dark:text-indigo-400">0</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Qty</p>
+                        <p id="stat-qty" class="text-2xl font-extrabold mt-1 text-emerald-600 dark:text-emerald-400">0</p>
+                    </div>
+                </div>
+
+                <!-- Scanned Log Container -->
+                <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+                    <!-- Toolbar -->
+                    <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="relative flex-1">
+                            <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input type="text" id="input-search" placeholder="Search barcodes, remarks, or status..."
+                                class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 outline-none text-sm transition-all">
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button id="btn-export-csv" type="button" title="Download as CSV" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors">
+                                CSV
+                            </button>
+                            <button id="btn-clear-all" type="button" class="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold transition-colors">
+                                Clear All
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Entries List -->
+                    <div id="entries-list" class="divide-y divide-slate-100 dark:divide-slate-800 max-h-[560px] overflow-y-auto">
+                        <!-- Dynamically Populated -->
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="empty-state" class="p-12 text-center">
+                        <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No scanned items yet</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">Start the camera, upload a barcode image, or click <strong>Test Scan</strong> to log your first entry.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Edit Remark Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 class="text-base font-bold">Edit Scanned Entry</h3>
+                <button type="button" id="btn-close-edit" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form id="edit-form" class="p-5 space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Barcode</label>
+                    <input type="text" id="edit-barcode" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sm font-mono font-semibold outline-none focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Quantity</label>
+                        <input type="number" id="edit-qty" min="1" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sm font-bold outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Condition / Tag</label>
+                        <select id="edit-status" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sm font-medium outline-none focus:border-indigo-500">
+                            <option value="Verified">Verified / OK</option>
+                            <option value="Damaged">Damaged</option>
+                            <option value="Low Stock">Low Stock</option>
+                            <option value="Review">Needs Review</option>
+                            <option value="Returned">Returned</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Remarks</label>
+                    <textarea id="edit-remarks" rows="3" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sm outline-none focus:border-indigo-500 resize-none"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" id="btn-cancel-edit" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-semibold">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Update Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirm Clear All Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 text-center">
+            <div class="w-12 h-12 mx-auto rounded-full bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-3">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </div>
+            <h3 class="text-base font-bold">Clear All Entries?</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">This will permanently remove all scanned barcodes and remarks from your browser storage.</p>
+            <div class="grid grid-cols-2 gap-2.5 mt-5">
+                <button type="button" id="btn-cancel-clear" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-semibold">Cancel</button>
+                <button type="button" id="btn-confirm-clear" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Yes, Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+    <!-- Application Logic -->
+    <script>
+        (function () {
+            'use strict';
+
+            // =========================================================================
+            // 1. STATE & CONSTANTS
+            // =========================================================================
+            const STORAGE_KEY = 'scannote_entries_v1';
+            const THEME_KEY = 'scannote_theme_v1';
+
+            let entries = [];
+            let html5QrCode = null;
+            let isCameraRunning = false;
+            let soundEnabled = true;
+            let lastDetectedFormat = 'MANUAL';
+            let lastScanTime = 0;
+            let lastScanCode = '';
+
+            // Status badge styling map
+            const STATUS_STYLES = {
+                'Verified': 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20',
+                'Damaged': 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
+                'Low Stock': 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
+                'Review': 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/20',
+                'Returned': 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+            };
+
+            // Sample realistic barcodes for the "Test Scan" simulator
+            const SAMPLE_BARCODES = [
+                { code: '8901491101837', format: 'EAN_13' },
+                { code: '036000291452', format: 'UPC_A' },
+                { code: 'INV-2026-8841A', format: 'CODE_128' },
+                { code: 'SKU-WH-00492', format: 'CODE_39' },
+                { code: 'https://scannote.app/asset/409', format: 'QR_CODE' }
+            ];
+
+            // =========================================================================
+            // 2. DOM ELEMENTS
+            // =========================================================================
+            const el = {
+                btnSound: document.getElementById('btn-sound'),
+                iconSoundOn: document.getElementById('icon-sound-on'),
+                iconSoundOff: document.getElementById('icon-sound-off'),
+                btnTheme: document.getElementById('btn-theme'),
+                iconMoon: document.getElementById('icon-moon'),
+                iconSun: document.getElementById('icon-sun'),
+                btnExportExcel: document.getElementById('btn-export-excel'),
+                btnExportCsv: document.getElementById('btn-export-csv'),
+                btnClearAll: document.getElementById('btn-clear-all'),
+
+                scannerStatusDot: document.getElementById('scanner-status-dot'),
+                scannerPlaceholder: document.getElementById('scanner-placeholder'),
+                scannerLaser: document.getElementById('scanner-laser'),
+                scannerFlash: document.getElementById('scanner-flash'),
+                btnToggleCamera: document.getElementById('btn-toggle-camera'),
+                btnCameraText: document.getElementById('btn-camera-text'),
+                inputScanFile: document.getElementById('input-scan-file'),
+                btnSimulate: document.getElementById('btn-simulate'),
+                toggleAutosave: document.getElementById('toggle-autosave'),
+
+                entryForm: document.getElementById('entry-form'),
+                inputBarcode: document.getElementById('input-barcode'),
+                btnClearBarcode: document.getElementById('btn-clear-barcode'),
+                detectedFormatBadge: document.getElementById('detected-format-badge'),
+                inputQty: document.getElementById('input-qty'),
+                btnQtyMinus: document.getElementById('btn-qty-minus'),
+                btnQtyPlus: document.getElementById('btn-qty-plus'),
+                inputStatus: document.getElementById('input-status'),
+                inputRemarks: document.getElementById('input-remarks'),
+                quickChips: document.querySelectorAll('.quick-chip'),
+
+                statEntries: document.getElementById('stat-entries'),
+                statUnique: document.getElementById('stat-unique'),
+                statQty: document.getElementById('stat-qty'),
+                inputSearch: document.getElementById('input-search'),
+                entriesList: document.getElementById('entries-list'),
+                emptyState: document.getElementById('empty-state'),
+
+                editModal: document.getElementById('edit-modal'),
+                editForm: document.getElementById('edit-form'),
+                editId: document.getElementById('edit-id'),
+                editBarcode: document.getElementById('edit-barcode'),
+                editQty: document.getElementById('edit-qty'),
+                editStatus: document.getElementById('edit-status'),
+                editRemarks: document.getElementById('edit-remarks'),
+                btnCloseEdit: document.getElementById('btn-close-edit'),
+                btnCancelEdit: document.getElementById('btn-cancel-edit'),
+
+                confirmModal: document.getElementById('confirm-modal'),
+                btnCancelClear: document.getElementById('btn-cancel-clear'),
+                btnConfirmClear: document.getElementById('btn-confirm-clear'),
+                toastContainer: document.getElementById('toast-container')
+            };
+
+            // =========================================================================
+            // 3. UTILITIES (Audio Beep, Toast, Storage, Theme, Escaping)
+            // =========================================================================
+
+            /**
+             * Synthesizes a clean scanner beep using Web Audio API (no external files required).
+             */
+            function playBeep() {
+                if (!soundEnabled) return;
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) return;
+                    const ctx = new AudioCtx();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(1046.5, ctx.currentTime); // C6 crisp tone
+                    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.13);
+                } catch (err) {
+                    // Ignore audio context restrictions silently
+                }
+            }
+
+            /**
+             * Displays a non-blocking toast notification.
+             */
+            function showToast(message, type = 'info') {
+                const colors = {
+                    success: 'bg-emerald-600 text-white',
+                    error: 'bg-rose-600 text-white',
+                    info: 'bg-slate-900 dark:bg-slate-800 text-white border border-slate-700'
+                };
+                const toast = document.createElement('div');
+                toast.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-medium flex items-center gap-2 transition-all duration-300 translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+                toast.textContent = message;
+                el.toastContainer.appendChild(toast);
+
+                requestAnimationFrame(() => {
+                    toast.classList.remove('translate-y-2', 'opacity-0');
+                });
+
+                setTimeout(() => {
+                    toast.classList.add('opacity-0', 'translate-y-2');
+                    setTimeout(() => toast.remove(), 300);
+                }, 2800);
+            }
+
+            /**
+             * Safely escapes HTML to prevent XSS in user remarks/barcodes.
+             */
+            function escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function loadEntries() {
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    entries = saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    entries = [];
+                }
+            }
+
+            function saveEntries() {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+                } catch (e) {
+                    showToast('Could not save to local storage.', 'error');
+                }
+            }
+
+            function initTheme() {
+                const savedTheme = localStorage.getItem(THEME_KEY);
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
+                applyTheme(isDark);
+            }
+
+            function applyTheme(isDark) {
+                document.documentElement.classList.toggle('dark', isDark);
+                el.iconMoon.classList.toggle('hidden', isDark);
+                el.iconSun.classList.toggle('hidden', !isDark);
+                localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+            }
+
+            // =========================================================================
+            // 4. BARCODE SCANNER LOGIC (Camera, File Upload, Simulator)
+            // =========================================================================
+
+            function triggerScanFlash() {
+                el.scannerFlash.classList.remove('opacity-0');
+                setTimeout(() => el.scannerFlash.classList.add('opacity-0'), 250);
+            }
+
+            /**
+             * Handles a decoded barcode from camera, uploaded image, or simulator.
+             */
+            function handleDecodedBarcode(decodedText, formatName = 'BARCODE') {
+                const now = Date.now();
+                // Debounce identical rapid scans within 1.8 seconds
+                if (decodedText === lastScanCode && now - lastScanTime < 1800) {
+                    return;
+                }
+                lastScanCode = decodedText;
+                lastScanTime = now;
+                lastDetectedFormat = formatName;
+
+                playBeep();
+                triggerScanFlash();
+
+                // Auto-Save Mode: immediately log the barcode
+                if (el.toggleAutosave.checked) {
+                    addEntry({
+                        barcode: decodedText.trim(),
+                        format: formatName,
+                        quantity: 1,
+                        status: el.inputStatus.value || 'Verified',
+                        remarks: el.inputRemarks.value.trim() || 'Auto-scanned'
+                    });
+                    showToast(`Auto-saved: ${decodedText}`, 'success');
+                    return;
+                }
+
+                // Standard Mode: populate form and focus Remarks input
+                el.inputBarcode.value = decodedText.trim();
+                el.btnClearBarcode.classList.remove('hidden');
+                el.detectedFormatBadge.textContent = formatName;
+                el.detectedFormatBadge.classList.remove('hidden');
+                el.inputRemarks.focus();
+                showToast(`Scanned: ${decodedText}`, 'success');
+            }
+
+            async function startCamera() {
+                if (typeof Html5Qrcode === 'undefined') {
+                    showToast('Scanner library failed to load. Check internet connection.', 'error');
+                    return;
+                }
+
+                try {
+                    if (!html5QrCode) {
+                        html5QrCode = new Html5Qrcode('reader');
+                    }
+
+                    const config = {
+                        fps: 10,
+                        qrbox: { width: 240, height: 140 },
+                        aspectRatio: 1.333
+                    };
+
+                    el.scannerPlaceholder.classList.add('hidden');
+                    await html5QrCode.start(
+                        { facingMode: 'environment' },
+                        config,
+                        (decodedText, decodedResult) => {
+                            const fmt = decodedResult?.result?.format?.formatName || 'BARCODE';
+                            handleDecodedBarcode(decodedText, fmt);
+                        },
+                        () => {
+                            // Ignore frame-by-frame scan misses
+                        }
+                    );
+
+                    isCameraRunning = true;
+                    el.scannerLaser.classList.remove('hidden');
+                    el.scannerStatusDot.classList.remove('bg-slate-300', 'dark:bg-slate-600');
+                    el.scannerStatusDot.classList.add('bg-emerald-500', 'animate-pulse-fast');
+                    el.btnCameraText.textContent = 'Stop Camera';
+                    el.btnToggleCamera.classList.replace('bg-indigo-600', 'bg-rose-600');
+                    el.btnToggleCamera.classList.replace('hover:bg-indigo-700', 'hover:bg-rose-700');
+                } catch (err) {
+                    el.scannerPlaceholder.classList.remove('hidden');
+                    showToast('Camera unavailable or permission denied. Try "Scan Image" or "Test Scan".', 'error');
+                }
+            }
+
+            async function stopCamera() {
+                if (html5QrCode && isCameraRunning) {
+                    try {
+                        await html5QrCode.stop();
+                    } catch (e) {
+                        // Ignore stop errors
+                    }
+                }
+                isCameraRunning = false;
+                el.scannerLaser.classList.add('hidden');
+                el.scannerPlaceholder.classList.remove('hidden');
+                el.scannerStatusDot.classList.remove('bg-emerald-500', 'animate-pulse-fast');
+                el.scannerStatusDot.classList.add('bg-slate-300', 'dark:bg-slate-600');
+                el.btnCameraText.textContent = 'Start Camera';
+                el.btnToggleCamera.classList.replace('bg-rose-600', 'bg-indigo-600');
+                el.btnToggleCamera.classList.replace('hover:bg-rose-700', 'hover:bg-indigo-700');
+            }
+
+            async function scanImageFile(file) {
+                if (!file) return;
+                if (typeof Html5Qrcode === 'undefined') {
+                    showToast('Scanner library not loaded.', 'error');
+                    return;
+                }
+                try {
+                    if (isCameraRunning) {
+                        await stopCamera();
+                    }
+                    if (!html5QrCode) {
+                        html5QrCode = new Html5Qrcode('reader');
+                    }
+                    const result = await html5QrCode.scanFileV2(file, false);
+                    const fmt = result?.result?.format?.formatName || 'IMAGE_SCAN';
+                    handleDecodedBarcode(result.decodedText, fmt);
+                } catch (err) {
+                    showToast('No barcode detected in that image. Try a clearer photo.', 'error');
+                } finally {
+                    el.inputScanFile.value = '';
+                }
+            }
+
+            // =========================================================================
+            // 5. CRUD & RENDERING
+            // =========================================================================
+
+            function addEntry({ barcode, format, quantity, status, remarks }) {
+                const newEntry = {
+                    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    barcode: barcode,
+                    format: format || 'MANUAL',
+                    quantity: Math.max(1, parseInt(quantity, 10) || 1),
+                    status: status || 'Verified',
+                    remarks: remarks || '',
+                    timestamp: new Date().toISOString()
+                };
+                entries.unshift(newEntry);
+                saveEntries();
+                renderEntries();
+            }
+
+            function deleteEntry(id) {
+                entries = entries.filter(item => item.id !== id);
+                saveEntries();
+                renderEntries();
+                showToast('Entry deleted.', 'info');
+            }
+
+            function openEditModal(id) {
+                const item = entries.find(e => e.id === id);
+                if (!item) return;
+                el.editId.value = item.id;
+                el.editBarcode.value = item.barcode;
+                el.editQty.value = item.quantity;
+                el.editStatus.value = item.status;
+                el.editRemarks.value = item.remarks;
+                el.editModal.classList.remove('hidden');
+            }
+
+            function closeEditModal() {
+                el.editModal.classList.add('hidden');
+            }
+
+            function formatDisplayTime(isoString) {
+                try {
+                    const d = new Date(isoString);
+                    return d.toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch {
+                    return isoString;
+                }
+            }
+
+            function renderEntries() {
+                const query = el.inputSearch.value.trim().toLowerCase();
+
+                // Update Summary Stats
+                const uniqueSet = new Set(entries.map(e => e.barcode));
+                const totalQty = entries.reduce((sum, e) => sum + (parseInt(e.quantity, 10) || 1), 0);
+                el.statEntries.textContent = entries.length;
+                el.statUnique.textContent = uniqueSet.size;
+                el.statQty.textContent = totalQty;
+
+                // Filter list
+                const filtered = entries.filter(item => {
+                    if (!query) return true;
+                    return (
+                        item.barcode.toLowerCase().includes(query) ||
+                        item.remarks.toLowerCase().includes(query) ||
+                        item.status.toLowerCase().includes(query)
+                    );
+                });
+
+                el.entriesList.innerHTML = '';
+
+                if (filtered.length === 0) {
+                    el.emptyState.classList.remove('hidden');
+                    return;
+                }
+
+                el.emptyState.classList.add('hidden');
+
+                const fragment = document.createDocumentFragment();
+                filtered.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'p-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3';
+
+                    const badgeClass = STATUS_STYLES[item.status] || STATUS_STYLES['Verified'];
+                    const remarksHtml = item.remarks
+                        ? `<p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 break-words">${escapeHtml(item.remarks)}</p>`
+                        : `<p class="text-xs italic text-slate-400 dark:text-slate-500 mt-1">No remarks added</p>`;
+
+                    row.innerHTML = `
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono font-bold text-sm text-slate-900 dark:text-white break-all">${escapeHtml(item.barcode)}</span>
+                                <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold border ${badgeClass}">${escapeHtml(item.status)}</span>
+                                <span class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Qty: ${item.quantity}</span>
+                            </div>
+                            ${remarksHtml}
+                            <div class="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                                <span>${formatDisplayTime(item.timestamp)}</span>
+                                <span>•</span>
+                                <span class="uppercase">${escapeHtml(item.format)}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                            <button type="button" data-action="edit" data-id="${item.id}" title="Edit Remark" class="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-400 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                            </button>
+                            <button type="button" data-action="delete" data-id="${item.id}" title="Delete Entry" class="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/15 dark:hover:text-rose-400 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                    fragment.appendChild(row);
+                });
+
+                el.entriesList.appendChild(fragment);
+            }
+
+            // =========================================================================
+            // 6. EXCEL (.xlsx) & CSV EXPORT
+            // =========================================================================
+
+            function getExportRows() {
+                return entries.map((item, idx) => ({
+                    'S.No': idx + 1,
+                    'Barcode': item.barcode,
+                    'Format': item.format,
+                    'Quantity': item.quantity,
+                    'Condition / Status': item.status,
+                    'Remarks': item.remarks,
+                    'Date & Time': new Date(item.timestamp).toLocaleString()
+                }));
+            }
+
+            function exportToExcel() {
+                if (entries.length === 0) {
+                    showToast('No entries to export yet!', 'error');
+                    return;
+                }
+                if (typeof XLSX === 'undefined') {
+                    showToast('Excel library unavailable. Falling back to CSV.', 'error');
+                    exportToCsv();
+                    return;
+                }
+
+                try {
+                    const rows = getExportRows();
+                    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+                    // Auto-size columns for a crisp Excel layout
+                    worksheet['!cols'] = [
+                        { wch: 6 },  // S.No
+                        { wch: 24 }, // Barcode
+                        { wch: 12 }, // Format
+                        { wch: 10 }, // Quantity
+                        { wch: 18 }, // Status
+                        { wch: 40 }, // Remarks
+                        { wch: 22 }  // Date & Time
+                    ];
+
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, 'Scanned Barcodes');
+
+                    const dateStamp = new Date().toISOString().slice(0, 10);
+                    XLSX.writeFile(workbook, `ScanNote_Export_${dateStamp}.xlsx`);
+                    showToast(`Exported ${entries.length} items to Excel (.xlsx)!`, 'success');
+                } catch (err) {
+                    showToast('Failed to generate Excel file.', 'error');
+                }
+            }
+
+            function exportToCsv() {
+                if (entries.length === 0) {
+                    showToast('No entries to export yet!', 'error');
+                    return;
+                }
+                try {
+                    const rows = getExportRows();
+                    const headers = Object.keys(rows[0]);
+                    const csvLines = [
+                        headers.join(','),
+                        ...rows.map(row =>
+                            headers.map(h => `"${String(row[h]).replace(/"/g, '""')}"`).join(',')
+                        )
+                    ];
+                    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const dateStamp = new Date().toISOString().slice(0, 10);
+                    a.href = url;
+                    a.download = `ScanNote_Export_${dateStamp}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    showToast(`Exported ${entries.length} items to CSV!`, 'success');
+                } catch (err) {
+                    showToast('Failed to export CSV.', 'error');
+                }
+            }
+
+            // =========================================================================
+            // 7. EVENT LISTENERS
+            // =========================================================================
+
+            // Sound & Theme
+            el.btnSound.addEventListener('click', () => {
+                soundEnabled = !soundEnabled;
+                el.iconSoundOn.classList.toggle('hidden', !soundEnabled);
+                el.iconSoundOff.classList.toggle('hidden', soundEnabled);
+                showToast(soundEnabled ? 'Scan beep enabled' : 'Scan beep muted', 'info');
+            });
+
+            el.btnTheme.addEventListener('click', () => {
+                const isCurrentlyDark = document.documentElement.classList.contains('dark');
+                applyTheme(!isCurrentlyDark);
+            });
+
+            // Camera, File Upload & Simulator
+            el.btnToggleCamera.addEventListener('click', () => {
+                if (isCameraRunning) {
+                    stopCamera();
+                } else {
+                    startCamera();
+                }
+            });
+
+            el.inputScanFile.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    scanImageFile(e.target.files[0]);
+                }
+            });
+
+            el.btnSimulate.addEventListener('click', () => {
+                const sample = SAMPLE_BARCODES[Math.floor(Math.random() * SAMPLE_BARCODES.length)];
+                // Bypass duplicate debounce for test button
+                lastScanTime = 0;
+                handleDecodedBarcode(sample.code, sample.format);
+            });
+
+            // Barcode input helper
+            el.inputBarcode.addEventListener('input', () => {
+                const hasVal = el.inputBarcode.value.trim().length > 0;
+                el.btnClearBarcode.classList.toggle('hidden', !hasVal);
+                if (!hasVal) {
+                    lastDetectedFormat = 'MANUAL';
+                    el.detectedFormatBadge.classList.add('hidden');
+                }
+            });
+
+            el.btnClearBarcode.addEventListener('click', () => {
+                el.inputBarcode.value = '';
+                el.btnClearBarcode.classList.add('hidden');
+                el.detectedFormatBadge.classList.add('hidden');
+                lastDetectedFormat = 'MANUAL';
+                el.inputBarcode.focus();
+            });
+
+            // Quantity stepper
+            el.btnQtyMinus.addEventListener('click', () => {
+                const current = parseInt(el.inputQty.value, 10) || 1;
+                el.inputQty.value = Math.max(1, current - 1);
+            });
+
+            el.btnQtyPlus.addEventListener('click', () => {
+                const current = parseInt(el.inputQty.value, 10) || 1;
+                el.inputQty.value = current + 1;
+            });
+
+            // Quick Remark Chips
+            el.quickChips.forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const phrase = chip.getAttribute('data-remark');
+                    const current = el.inputRemarks.value.trim();
+                    if (!current) {
+                        el.inputRemarks.value = phrase;
+                    } else if (!current.toLowerCase().includes(phrase.toLowerCase())) {
+                        el.inputRemarks.value = `${current}; ${phrase}`;
+                    }
+                    el.inputRemarks.focus();
+                });
+            });
+
+            // Form Submit
+            el.entryForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const barcode = el.inputBarcode.value.trim();
+                if (!barcode) {
+                    showToast('Please scan or enter a barcode first.', 'error');
+                    el.inputBarcode.focus();
+                    return;
+                }
+
+                addEntry({
+                    barcode,
+                    format: lastDetectedFormat,
+                    quantity: el.inputQty.value,
+                    status: el.inputStatus.value,
+                    remarks: el.inputRemarks.value.trim()
+                });
+
+                // Reset form for next scan
+                el.inputBarcode.value = '';
+                el.inputRemarks.value = '';
+                el.inputQty.value = '1';
+                el.btnClearBarcode.classList.add('hidden');
+                el.detectedFormatBadge.classList.add('hidden');
+                lastDetectedFormat = 'MANUAL';
+                showToast('Entry saved to log!', 'success');
+            });
+
+            // List Delegation (Edit / Delete)
+            el.entriesList.addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-action]');
+                if (!btn) return;
+                const action = btn.getAttribute('data-action');
+                const id = btn.getAttribute('data-id');
+                if (action === 'edit') openEditModal(id);
+                if (action === 'delete') deleteEntry(id);
+            });
+
+            // Search
+            el.inputSearch.addEventListener('input', renderEntries);
+
+            // Edit Modal Events
+            el.btnCloseEdit.addEventListener('click', closeEditModal);
+            el.btnCancelEdit.addEventListener('click', closeEditModal);
+            el.editForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = el.editId.value;
+                const idx = entries.findIndex(item => item.id === id);
+                if (idx !== -1) {
+                    entries[idx].barcode = el.editBarcode.value.trim();
+                    entries[idx].quantity = Math.max(1, parseInt(el.editQty.value, 10) || 1);
+                    entries[idx].status = el.editStatus.value;
+                    entries[idx].remarks = el.editRemarks.value.trim();
+                    saveEntries();
+                    renderEntries();
+                    showToast('Entry updated!', 'success');
+                }
+                closeEditModal();
+            });
+
+            // Clear All Confirmation Modal
+            el.btnClearAll.addEventListener('click', () => {
+                if (entries.length === 0) {
+                    showToast('Log is already empty.', 'info');
+                    return;
+                }
+                el.confirmModal.classList.remove('hidden');
+            });
+
+            el.btnCancelClear.addEventListener('click', () => {
+                el.confirmModal.classList.add('hidden');
+            });
+
+            el.btnConfirmClear.addEventListener('click', () => {
+                entries = [];
+                saveEntries();
+                renderEntries();
+                el.confirmModal.classList.add('hidden');
+                showToast('All entries cleared.', 'info');
+            });
+
+            // Exports
+            el.btnExportExcel.addEventListener('click', exportToExcel);
+            el.btnExportCsv.addEventListener('click', exportToCsv);
+
+            // =========================================================================
+            // 8. INITIALIZATION
+            // =========================================================================
+            initTheme();
+            loadEntries();
+            renderEntries();
+        })();
+    </script>
+</body>
+</html>
+```
